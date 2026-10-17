@@ -1,5 +1,5 @@
-"""
-FastAPI — Incident Response Agent API
+﻿"""
+FastAPI â€” Incident Response Agent API
 ======================================
 Endpoints:
   POST /incidents                 -> trigger agent with alert payload
@@ -39,14 +39,13 @@ from agent.incident_runner import (
     reject_incident_remediation,
     _get_redis_safe,
 )
-from agent.redis_queue import publish_alert
 from agent.memory import recall_similar_incidents, _get_collection
 
 
 # App setup
 app = FastAPI(
     title="Incident Response Agent",
-    description="Autonomous SRE agent — LangGraph + Groq + ChromaDB",
+    description="Autonomous SRE agent â€” LangGraph + Groq + ChromaDB",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -99,7 +98,7 @@ def _run_agent_background(alert_dict: dict, incident_id: str):
 
 @app.get("/health", tags=["System"])
 @app.get("/api/health", tags=["System"])
-async def health():
+def health():
     """
     Comprehensive healthcheck inspecting real backend components:
     FastAPI, Redis, Groq, ChromaDB, and Agent Listener.
@@ -161,7 +160,7 @@ async def health():
 
 @app.post("/incidents", tags=["Incidents"])
 @app.post("/api/incidents", tags=["Incidents"])
-async def trigger_incident(
+def trigger_incident(
     alert: AlertPayload,
     background_tasks: BackgroundTasks,
 ):
@@ -180,18 +179,23 @@ async def trigger_incident(
     if not alert_dict.get("affected_services"):
         alert_dict["affected_services"] = [alert_dict.get("service", "unknown")]
 
-    # Run agent in background
+    # Run the agent in background â€” and ONLY here.
+    #
+    # This alert used to be executed locally *and* published to Redis, where
+    # the listener picked it up and ran the very same incident_id a second
+    # time. Two processes then wrote one record, so whichever finished last
+    # overwrote the other: a listener run that never got approval would clobber
+    # an already-resolved incident back to "mitigating".
+    #
+    # The API is guaranteed to be alive (it just served this request), so it
+    # owns dashboard-triggered incidents. The listener keeps handling alerts
+    # published from outside (scripts/publish_alert.py), which carry no
+    # incident_id and therefore never collide.
     background_tasks.add_task(
         _run_agent_background,
         alert_dict,
         incident_id,
     )
-
-    # Publish alert to Redis so agent listener (if running) is notified
-    try:
-        publish_alert(alert_dict)
-    except Exception:
-        pass
 
     return {
         "incident_id": incident_id,
@@ -204,7 +208,7 @@ async def trigger_incident(
 
 @app.get("/incidents/{incident_id}", tags=["Incidents"])
 @app.get("/api/incidents/{incident_id}", tags=["Incidents"])
-async def get_incident_details(incident_id: str):
+def get_incident_details(incident_id: str):
     """Get the full structured state and timeline of an incident."""
     inc = runner_get_incident(incident_id)
     if not inc:
@@ -214,14 +218,14 @@ async def get_incident_details(incident_id: str):
 
 @app.get("/incidents", tags=["Incidents"])
 @app.get("/api/incidents", tags=["Incidents"])
-async def list_all_incidents(limit: int = 50):
+def list_all_incidents(limit: int = 50):
     """List all active and past incidents."""
     return runner_list_incidents(limit=limit)
 
 
 @app.post("/incidents/{incident_id}/approve", tags=["Approval"])
 @app.post("/api/incidents/{incident_id}/approve", tags=["Approval"])
-async def approve_incident(incident_id: str):
+def approve_incident(incident_id: str):
     """
     Operator approves the recommended remediation action.
     Unblocks the LangGraph workflow to execute remediation.
@@ -238,7 +242,7 @@ async def approve_incident(incident_id: str):
 
 @app.post("/incidents/{incident_id}/reject", tags=["Approval"])
 @app.post("/api/incidents/{incident_id}/reject", tags=["Approval"])
-async def reject_incident(incident_id: str):
+def reject_incident(incident_id: str):
     """
     Operator rejects the recommended remediation action.
     The workflow skips remediation and proceeds directly to reporting.
@@ -255,7 +259,7 @@ async def reject_incident(incident_id: str):
 
 @app.get("/incidents/{incident_id}/report", tags=["Reports"])
 @app.get("/api/incidents/{incident_id}/report", tags=["Reports"])
-async def download_incident_report(incident_id: str):
+def download_incident_report(incident_id: str):
     """
     Download the generated markdown incident report.
     Returns Content-Type: text/markdown with attachment filename incident-{id}.md.
@@ -267,7 +271,7 @@ async def download_incident_report(incident_id: str):
     report_text = inc.get("report") or inc.get("incident_report")
     if not report_text:
         # Fallback summary if report generation not reached
-        report_text = f"# Incident Report — {incident_id}\n\nStatus: {inc.get('status')}\nTitle: {inc.get('title')}\n"
+        report_text = f"# Incident Report â€” {incident_id}\n\nStatus: {inc.get('status')}\nTitle: {inc.get('title')}\n"
 
     return Response(
         content=report_text,
@@ -282,14 +286,14 @@ async def download_incident_report(incident_id: str):
 
 @app.post("/incidents/test/{severity}", tags=["Demo"])
 @app.post("/api/incidents/test/{severity}", tags=["Demo"])
-async def fire_test_alert(
+def fire_test_alert(
     severity: str,
     background_tasks: BackgroundTasks,
 ):
     """Fire a sample alert for demo purposes (P0, P1, P2)."""
     samples = {
         "P0": AlertPayload(
-            title="auth-service complete outage — all regions",
+            title="auth-service complete outage â€” all regions",
             service="auth-service",
             metric="availability",
             value="0%",
@@ -309,7 +313,7 @@ async def fire_test_alert(
             severity="P1",
         ),
         "P2": AlertPayload(
-            title="Search latency elevated — eu-west-1",
+            title="Search latency elevated â€” eu-west-1",
             service="search-service",
             metric="p99_latency_ms",
             value="4200",
@@ -324,14 +328,14 @@ async def fire_test_alert(
     if sev_upper not in samples:
         raise HTTPException(status_code=400, detail="severity must be P0, P1, or P2")
 
-    return await trigger_incident(samples[sev_upper], background_tasks)
+    return trigger_incident(samples[sev_upper], background_tasks)
 
 
 # --- RUNBOOKS ---
 
 @app.get("/runbooks", tags=["Runbooks"])
 @app.get("/api/runbooks", tags=["Runbooks"])
-async def list_runbooks():
+def list_runbooks():
     """List available runbooks from the repository."""
     runbook_files = glob.glob("runbooks/*.md")
     result = []
@@ -361,7 +365,7 @@ async def list_runbooks():
 
 @app.get("/runbooks/{filename}", tags=["Runbooks"])
 @app.get("/api/runbooks/{filename}", tags=["Runbooks"])
-async def get_runbook_content(filename: str):
+def get_runbook_content(filename: str):
     """Retrieve full content of a specific runbook."""
     safe_fn = os.path.basename(filename)
     if not safe_fn.endswith(".md"):
@@ -383,7 +387,7 @@ async def get_runbook_content(filename: str):
 
 @app.get("/memory", tags=["Memory"])
 @app.get("/api/memory", tags=["Memory"])
-async def get_incident_memory(query: Optional[str] = Query(None)):
+def get_incident_memory(query: Optional[str] = Query(None)):
     """Query ChromaDB incident memory for past incidents."""
     try:
         col = _get_collection()
@@ -420,7 +424,7 @@ async def get_incident_memory(query: Optional[str] = Query(None)):
 
 @app.get("/stats", tags=["System"])
 @app.get("/api/stats", tags=["System"])
-async def get_stats():
+def get_stats():
     """Agent performance statistics."""
     try:
         col = _get_collection()

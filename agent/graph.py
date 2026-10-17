@@ -28,7 +28,7 @@ from agent.llm import get_llm
 from agent.reasoner import CONFIDENCE_THRESHOLD, MAX_RETRIES
 from agent.metrics import query_metrics
 from agent.rag import retrieve_runbook 
-from agent.remediation import plan_remediation, execute_remediation, AUTO_REMEDIATE_THRESHOLD
+from agent.remediation import plan_remediation, execute_remediation
 from agent.memory import recall_similar_incidents, store_incident
 from agent.approval import request_approval
 from agent.decision_provider import get_decision_provider
@@ -105,6 +105,12 @@ def recall_memory(state: IncidentState) -> dict:
     First thing the agent does after triage —
     search memory for similar past incidents.
     Results get injected into the reasoning prompt.
+
+    Past incidents are an ENHANCEMENT, not a requirement. If the memory
+    store is unreachable (embedding model failed to load, ChromaDB error,
+    out of memory) we log it and continue with an empty list rather than
+    killing the whole incident at node 2 — which is exactly how incidents
+    used to get frozen at "recall_memory".
     """
     print(f"\n[MEMORY] [recall_memory] Searching past incidents...")
 
@@ -114,7 +120,15 @@ def recall_memory(state: IncidentState) -> dict:
         " ".join(state.get("affected_services", [])),
     ])
 
-    similar = recall_similar_incidents(query)
+    try:
+        similar = recall_similar_incidents(query)
+    except Exception as exc:
+        # _get_collection() lives outside recall_similar_incidents()'s own
+        # try/except, so a store failure reaches here and used to escape
+        # uncaught, aborting the run.
+        print(f"   [WARN] memory recall unavailable ({type(exc).__name__}: {exc})")
+        print("   [WARN] continuing WITHOUT past-incident history")
+        return {"similar_past_incidents": []}
 
     if similar:
         best = similar[0]
@@ -235,10 +249,14 @@ def auto_remediate(state: IncidentState) -> dict:
     """
     Autonomous remediation node.
 
-    if confidence >= AUTO_REMEDIATE_THRESHOLD:
-        plan → execute → verify
-    else:
-        skip and generate a report without changing state
+    Runs ONLY after a human operator has approved the action
+    (``approval_status == "approved"``). Approval is the gate; if it is
+    missing we skip execution and let the report say so.
+
+    NOTE: a confidence threshold of 0.92 exists (reasoner.CONFIDENCE_THRESHOLD)
+    and was historically meant to be checked here, but this node does not
+    evaluate it — and confidence_router(), the function that does, is not
+    wired into build_graph(). See MIGRATION_HANDOFF.md.
     """
     decision = state.get("decision", {})
     action = decision.get("recommended_action", "investigate_more")

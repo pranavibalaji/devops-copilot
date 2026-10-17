@@ -25,6 +25,7 @@ from agent.graph import build_graph, MAX_RETRIES
 from agent.approval import record_approval_decision, get_pending_approval
 from agent.redis_queue import get_redis_client, publish_alert
 from agent.memory import recall_similar_incidents, _get_collection
+from agent.simulated_env import reset_state
 
 # In-memory store for active incidents (fallback / fast read)
 _incidents_cache: Dict[str, Dict[str, Any]] = {}
@@ -159,6 +160,16 @@ def execute_incident_stream(alert_payload: Dict[str, Any], incident_id: str) -> 
     """
     Executes LangGraph workflow step-by-step and streams each stage to cache and Redis.
     """
+    # Every incident starts from the simulator's canonical demo conditions.
+    #
+    # _state is process-global and remediation mutates it in place
+    # (simulated_env sets services to "healthy"). It was never reset by the
+    # API — only by the test suite — so after the first successful fix every
+    # later incident in that process began "healthy". That made
+    # verification.before lie, made verification.passed meaningless, and
+    # reported REJECTED/unapproved incidents as "resolved".
+    reset_state()
+
     # Ensure incident_id is passed in the alert payload
     alert_copy = dict(alert_payload)
     alert_copy["incident_id"] = incident_id
@@ -306,7 +317,13 @@ def execute_incident_stream(alert_payload: Dict[str, Any], incident_id: str) -> 
             elif node_name == "save_to_memory":
                 record["status"] = "resolved" if record["verification"].get("passed") else "mitigating"
                 record["current_stage"] = "completed"
-                record["resolved_at"] = datetime.utcnow().isoformat() + "Z"
+                # "resolved_at" must mean *when this incident was actually
+                # fixed*. It used to be stamped unconditionally, producing
+                # records that claimed "resolved at 03:02" while their status
+                # still read "mitigating". duration_seconds below still records
+                # when the run ended, which is what the dashboard displays.
+                if record["status"] == "resolved":
+                    record["resolved_at"] = datetime.utcnow().isoformat() + "Z"
                 record["duration_seconds"] = round(time.time() - start_time, 2)
 
             with _cache_lock:
@@ -368,9 +385,23 @@ def get_incident(incident_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _incident_is_active(record: Dict[str, Any]) -> bool:
+    """True only while this incident's run is still in flight.
+
+    ``_incidents_cache`` is a fast-read snapshot that this process never
+    evicts, so treating *everything* in it as "active" reported finished
+    incidents as active and then hid them from the past list (which skips
+    any id already present there). The run is over once the graph reached
+    its terminal stage or the record was stamped with ``resolved_at``.
+    """
+    if record.get("resolved_at"):
+        return False
+    return record.get("current_stage") != "completed"
+
+
 def list_incidents(limit: int = 50) -> Dict[str, Any]:
     with _cache_lock:
-        active_list = list(_incidents_cache.values())
+        active_list = [r for r in _incidents_cache.values() if _incident_is_active(r)]
 
     # Load past from ChromaDB
     past = []
@@ -412,20 +443,55 @@ def list_incidents(limit: int = 50) -> Dict[str, Any]:
 
 def approve_incident_remediation(incident_id: str) -> bool:
     success = record_approval_decision(incident_id, "approved")
-    # Update cache record
-    with _cache_lock:
-        if incident_id in _incidents_cache:
-            _incidents_cache[incident_id]["approval"]["status"] = "approved"
-            _incidents_cache[incident_id]["status"] = "mitigating"
-            _save_incident_to_redis(incident_id, _incidents_cache[incident_id])
-    return success
+    if not success:
+        # No live, still-pending approval for THIS id. Do not touch the
+        # incident record — writing here used to flip finished incidents
+        # back to "mitigating" on a bogus approve request.
+        return False
+    return _apply_approval_decision(incident_id, "approved", "mitigating")
 
 
 def reject_incident_remediation(incident_id: str) -> bool:
     success = record_approval_decision(incident_id, "denied")
+    if not success:
+        # Same guard as approve: never mutate a record that was not actually
+        # waiting on this decision.
+        return False
+    return _apply_approval_decision(incident_id, "denied", "rejected")
+
+
+def _apply_approval_decision(
+    incident_id: str, decision: str, next_status: str
+) -> bool:
+    """Record an approval decision on the incident itself.
+
+    Two rules keep this safe:
+
+    * The decision is based on the **freshest** copy of the record, preferring
+      Redis over this process's cache — the other process may have advanced
+      the incident while we were not looking.
+    * The record may only change while its own approval field is still
+      pending. Approving must never resurrect an incident that already
+      finished, even when the approval registry says otherwise.
+    """
     with _cache_lock:
-        if incident_id in _incidents_cache:
-            _incidents_cache[incident_id]["approval"]["status"] = "denied"
-            _incidents_cache[incident_id]["status"] = "rejected"
-            _save_incident_to_redis(incident_id, _incidents_cache[incident_id])
-    return success
+        record = _load_incident_from_redis(incident_id) or _incidents_cache.get(
+            incident_id
+        )
+        if record is None:
+            # Nothing to update. The decision itself was still recorded, so
+            # the caller should report success rather than "not found".
+            return True
+
+        approval = record.get("approval")
+        if not isinstance(approval, dict) or approval.get("status") != "pending":
+            # Gate and record disagree: this one is already settled, or never
+            # existed. Refuse to rewrite history.
+            return False
+
+        approval["status"] = decision
+        approval["resolved_at"] = datetime.utcnow().isoformat() + "Z"
+        record["status"] = next_status
+        _incidents_cache[incident_id] = record
+        _save_incident_to_redis(incident_id, record)
+    return True
