@@ -7,6 +7,7 @@ import { IncidentDetails } from './components/IncidentDetails'
 import { IncidentsList } from './components/IncidentsList'
 import { RunbooksPage } from './components/RunbooksPage'
 import { MemoryPage } from './components/MemoryPage'
+import { AnalyticsDashboard } from './components/AnalyticsDashboard'
 import type { Incident, SystemStatus } from './types/incident'
 import { fetchHealth, fetchIncidents } from './lib/api'
 
@@ -75,6 +76,8 @@ export const App: React.FC = () => {
         return 'Overview'
       case 'incidents':
         return 'Incident Records'
+      case 'analytics':
+        return 'Incident Analytics'
       case 'runbooks':
         return 'Runbook Documentation'
       case 'memory':
@@ -121,6 +124,11 @@ export const App: React.FC = () => {
               incidents={activeIncidents}
               pastIncidents={pastIncidents}
               onSelectIncident={handleSelectIncident}
+            />
+          ) : currentTab === 'analytics' ? (
+            <AnalyticsDashboard
+              incidents={activeIncidents}
+              pastIncidents={pastIncidents}
             />
           ) : currentTab === 'runbooks' ? (
             <RunbooksPage />

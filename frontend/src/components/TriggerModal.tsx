@@ -113,7 +113,7 @@ export const TriggerModal: React.FC<TriggerModalProps> = ({
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 600 }}>Simulate Production Incident</h3>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Triggers the live LangGraph agent workflow with Groq decision making
+              Triggers the live LangGraph agent workflow using the configured decision provider
             </p>
           </div>
           <button

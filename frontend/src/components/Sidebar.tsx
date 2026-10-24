@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity, AlertOctagon, BookOpen, Database, ShieldAlert } from 'lucide-react'
+import { Activity, AlertOctagon, BarChart3, BookOpen, Database, ShieldAlert } from 'lucide-react'
 import type { SystemStatus } from '../types/incident'
 
 interface SidebarProps {
@@ -36,6 +36,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, setCurrentTab, sta
         >
           <AlertOctagon size={16} />
           <span>Incidents</span>
+        </button>
+
+        <button
+          className={`nav-link ${currentTab === 'analytics' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('analytics')}
+        >
+          <BarChart3 size={16} />
+          <span>Analytics</span>
         </button>
 
         <button

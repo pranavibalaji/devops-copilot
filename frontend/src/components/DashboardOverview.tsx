@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import type { Incident, SystemStatus } from '../types/incident'
 import { triggerTestIncident } from '../lib/api'
+import { IncidentSummaryCards } from './IncidentSummaryCards'
 
 interface DashboardOverviewProps {
   incidents: Incident[]
@@ -47,10 +48,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   ).length
 
   return (
-    <div>
+    <div className="dashboard-overview">
       {/* Top Banner */}
       <div
-        className="card"
+        className="card command-hero"
         style={{
           backgroundColor: '#FAF9F6',
           border: '1px solid var(--border-color)',
@@ -79,9 +80,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         </div>
       </div>
 
+      <IncidentSummaryCards incidents={incidents} pastIncidents={pastIncidents} />
+
       {/* KPI Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div className="card" style={{ padding: '18px', marginBottom: 0 }}>
+      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div className="card kpi-card" style={{ padding: '18px', marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Active Incidents
@@ -96,7 +99,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           </span>
         </div>
 
-        <div className="card" style={{ padding: '18px', marginBottom: 0 }}>
+        <div className="card kpi-card" style={{ padding: '18px', marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               ChromaDB Memory
@@ -104,14 +107,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <Database size={16} style={{ color: 'var(--text-muted)' }} />
           </div>
           <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            {status?.memory_incidents || pastIncidents.length || 17}
+            {status?.memory_incidents ?? pastIncidents.length}
           </div>
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
             Indexed past incidents for RAG matching
           </span>
         </div>
 
-        <div className="card" style={{ padding: '18px', marginBottom: 0 }}>
+        <div className="card kpi-card" style={{ padding: '18px', marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Decision Provider
@@ -119,14 +122,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <Cpu size={16} style={{ color: '#15803D' }} />
           </div>
           <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            Groq GPT-OSS
+            {status?.decision_provider?.toUpperCase() || 'Not available'}
           </div>
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            Model: openai/gpt-oss-120b
+            {status ? 'Configured decision provider' : 'Waiting for backend health'}
           </span>
         </div>
 
-        <div className="card" style={{ padding: '18px', marginBottom: 0 }}>
+        <div className="card kpi-card" style={{ padding: '18px', marginBottom: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Backend Health
@@ -137,13 +140,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             {status?.status === 'healthy' ? 'Operational' : 'Ready'}
           </div>
           <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            Redis & LangGraph connected
+            {status?.status === 'healthy' ? 'Redis and memory reachable' : 'Waiting for a healthy backend'}
           </span>
         </div>
       </div>
 
       {/* QUICK DEMO TRIGGER CARD */}
       <div
+        className="quick-demo-card"
         style={{
           border: '1px solid #D5D1C8',
           borderLeft: '4px solid #252525',
@@ -164,7 +168,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             <strong style={{ fontSize: '15px' }}>Checkout Deployment Failure</strong>
           </div>
           <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Simulate <code>checkout-service</code> high error rate (8.3%) caused by deployment v2.4.1. Tests full pipeline: Evidence → ChromaDB → Groq Decision → Human Approval → Rollback → Verification.
+            Simulate <code>checkout-service</code> high error rate (8.3%) caused by deployment v2.4.1. Tests full pipeline: Evidence → ChromaDB → Decision → Human Approval → Rollback → Verification.
           </p>
         </div>
 
@@ -179,7 +183,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       </div>
 
       {/* RECENT INCIDENTS TABLE */}
-      <div className="card">
+      <div className="card recent-incidents-card">
         <div className="card-header">
           <div className="card-title">
             <Layers size={16} /> Recent Incidents

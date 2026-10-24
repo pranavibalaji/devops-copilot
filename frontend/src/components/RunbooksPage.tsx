@@ -74,7 +74,7 @@ export const RunbooksPage: React.FC = () => {
       {selectedRunbook && (
         <div className="modal-overlay" onClick={() => setSelectedRunbook(null)}>
           <div
-            className="modal-dialog"
+            className="modal-dialog runbook-modal"
             style={{ maxWidth: '720px', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -84,22 +84,17 @@ export const RunbooksPage: React.FC = () => {
                 <h3 style={{ fontSize: '15px', fontWeight: 600 }}>runbooks/{selectedRunbook.filename}</h3>
               </div>
               <button
+                className="runbook-close"
                 onClick={() => setSelectedRunbook(null)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                aria-label="Close runbook"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, backgroundColor: '#FAF9F6' }}>
+            <div className="runbook-reader">
               <pre
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12.5px',
-                  lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap',
-                  color: 'var(--text-primary)',
-                }}
+                className="runbook-reader-content"
               >
                 {selectedRunbook.content}
               </pre>

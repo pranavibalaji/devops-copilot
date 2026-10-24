@@ -22,6 +22,9 @@ import {
   rejectRemediation,
   getReportDownloadUrl,
 } from '../lib/api'
+import { DecisionExplanationPanel } from './DecisionExplanationPanel'
+import { RecoveryComparison } from './RecoveryComparison'
+import { IncidentAuditTimeline } from './IncidentAuditTimeline'
 
 interface IncidentDetailsProps {
   incidentId: string
@@ -126,7 +129,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
   const isAwaitingApproval = incident.status === 'awaiting_approval'
 
   return (
-    <div>
+    <div className="incident-detail-page">
       {/* Back button & ID */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <button className="btn btn-secondary btn-sm" onClick={onBack}>
@@ -147,7 +150,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
       </div>
 
       {/* Incident Header Card */}
-      <div className="card" style={{ marginBottom: '24px' }}>
+      <div className="card incident-identity-card" style={{ marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -189,8 +192,10 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
         </div>
       </div>
 
+      <DecisionExplanationPanel incident={incident} />
+
       {/* WORKFLOW TIMELINE */}
-      <div className="card">
+      <div className="card workflow-pipeline-card">
         <div className="card-header">
           <div className="card-title">
             <Layers size={16} /> Workflow Execution Pipeline
@@ -204,12 +209,14 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
           {incident.stages.map((stage) => {
             const isCompleted = stage.status === 'completed'
             const isRunning = stage.status === 'running'
+            const isFailed = stage.status === 'failed'
             const isWaiting = stage.id === 'human_approval' && isAwaitingApproval
 
             let statusClass = ''
             if (isWaiting) statusClass = 'awaiting'
             else if (isRunning) statusClass = 'running'
             else if (isCompleted) statusClass = 'completed'
+            else if (isFailed) statusClass = 'failed'
 
             return (
               <div key={stage.id} className={`timeline-step ${statusClass}`}>
@@ -220,6 +227,8 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
                     <AlertTriangle size={13} />
                   ) : isRunning ? (
                     <Clock size={13} />
+                  ) : isFailed ? (
+                    <X size={13} />
                   ) : (
                     <span style={{ fontSize: '10px' }}>○</span>
                   )}
@@ -241,47 +250,49 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
         </div>
       </div>
 
+      <IncidentAuditTimeline incident={incident} />
+
       {/* HUMAN APPROVAL GATE PANEL */}
       {isAwaitingApproval && (
         <div className="approval-box">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <AlertTriangle size={18} style={{ color: '#D97706' }} />
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#92400E' }}>
+            <AlertTriangle className="approval-warning-icon" size={18} />
+            <h3 className="approval-heading" style={{ fontSize: '16px', fontWeight: 600 }}>
               Remediation Requires Operator Approval
             </h3>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '16px', margin: '14px 0' }}>
             <div>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Recommended Action</span>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <span className="approval-label" style={{ fontSize: '12px' }}>Recommended Action</span>
+              <div className="approval-value" style={{ fontSize: '15px', fontWeight: 600 }}>
                 {incident.approval.action.toUpperCase()}
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Target Service</span>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <span className="approval-label" style={{ fontSize: '12px' }}>Target Service</span>
+              <div className="approval-value" style={{ fontSize: '15px', fontWeight: 600 }}>
                 {incident.approval.service}
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Target Version</span>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+              <span className="approval-label" style={{ fontSize: '12px' }}>Target Version</span>
+              <div className="approval-value" style={{ fontSize: '15px', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
                 v2.4.0 (Previous Stable)
               </div>
             </div>
 
             <div>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Confidence</span>
-              <div style={{ fontSize: '15px', fontWeight: 600, color: '#15803D' }}>
+              <span className="approval-label" style={{ fontSize: '12px' }}>Confidence</span>
+              <div className="approval-confidence" style={{ fontSize: '15px', fontWeight: 600 }}>
                 {(incident.approval.confidence * 100).toFixed(0)}%
               </div>
             </div>
           </div>
 
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          <p className="approval-notice" style={{ fontSize: '13px', marginBottom: '16px' }}>
             Notice: This action will modify the simulated service state in memory and trigger automated health verification.
           </p>
 
@@ -308,23 +319,13 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
       {/* APPROVAL STATUS NOTIFICATION IF ALREADY DECIDED */}
       {incident.approval.resolved_at && !isAwaitingApproval && (
         <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: incident.approval.status === 'approved' ? '#F0FDF4' : '#FEF2F2',
-            border: `1px solid ${incident.approval.status === 'approved' ? '#BBF7D0' : '#FECACA'}`,
-            borderRadius: 'var(--radius-md)',
-            marginBottom: '24px',
-            fontSize: '13px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
+          className={`approval-status-banner approval-status-${incident.approval.status}`}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {incident.approval.status === 'approved' ? (
-              <CheckCircle2 size={16} style={{ color: '#15803D' }} />
+              <CheckCircle2 className="approval-status-icon" size={16} />
             ) : (
-              <AlertTriangle size={16} style={{ color: '#B91C1C' }} />
+              <AlertTriangle className="approval-status-icon" size={16} />
             )}
             <span>
               Operator approval: <strong>{incident.approval.status.toUpperCase()}</strong> on action{' '}
@@ -418,7 +419,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
 
         {/* Health & Deployment Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
-          <div style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#FAF9F6' }}>
+          <div className="evidence-surface" style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#FAF9F6' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Service Health</span>
             <div style={{ marginTop: '8px' }}>
               {Object.entries(incident.evidence.service_health || {}).map(([svc, hlth]) => (
@@ -432,7 +433,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
             </div>
           </div>
 
-          <div style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#FAF9F6' }}>
+          <div className="evidence-surface" style={{ padding: '14px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', backgroundColor: '#FAF9F6' }}>
             <span style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Recent Deployment</span>
             <div style={{ marginTop: '8px', fontSize: '13px' }}>
               {Object.entries(incident.evidence.deployment_history || {}).map(([svc, dep]) => (
@@ -495,7 +496,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {past.similarity !== undefined && (
-                    <span className="brand-badge" style={{ backgroundColor: '#F1EFEB' }}>
+                    <span className="brand-badge memory-match-badge" style={{ backgroundColor: '#F1EFEB' }}>
                       {(past.similarity * 100).toFixed(0)}% match
                     </span>
                   )}
@@ -519,6 +520,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
           </div>
 
           <div
+            className="detail-light-surface"
             style={{
               padding: '14px',
               backgroundColor: '#FAF9F6',
@@ -536,6 +538,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
       )}
 
       {/* REMEDIATION & VERIFICATION (If executed) */}
+      <RecoveryComparison incident={incident} />
       {incident.remediation.attempted && (
         <div className="card">
           <div className="card-header">
@@ -560,18 +563,18 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
                   BEFORE REMEDIATION
                 </span>
                 <div style={{ marginTop: '8px', fontSize: '13px' }}>
-                  <div>Health: <strong style={{ color: '#B91C1C' }}>degraded</strong></div>
-                  <div>Error rate: <strong style={{ color: '#B91C1C' }}>38.2%</strong></div>
+                  <div>Health: <strong style={{ color: '#ffabb9' }}>degraded</strong></div>
+                  <div>Error rate: <strong style={{ color: '#ffabb9' }}>38.2%</strong></div>
                 </div>
               </div>
 
               <div className="comparison-card after">
-                <span style={{ fontSize: '12px', color: '#15803D', textTransform: 'uppercase', fontWeight: 600 }}>
+                <span style={{ fontSize: '12px', color: '#71efc7', textTransform: 'uppercase', fontWeight: 600 }}>
                   AFTER REMEDIATION (VERIFIED)
                 </span>
                 <div style={{ marginTop: '8px', fontSize: '13px' }}>
-                  <div>Health: <strong style={{ color: '#15803D' }}>healthy</strong></div>
-                  <div>Error rate: <strong style={{ color: '#15803D' }}>0.3% (Normal)</strong></div>
+                  <div>Health: <strong style={{ color: '#71efc7' }}>healthy</strong></div>
+                  <div>Error rate: <strong style={{ color: '#71efc7' }}>0.3% (Normal)</strong></div>
                 </div>
               </div>
             </div>
@@ -596,6 +599,7 @@ export const IncidentDetails: React.FC<IncidentDetailsProps> = ({ incidentId, on
           </div>
 
           <div
+            className="detail-light-surface"
             style={{
               padding: '18px',
               backgroundColor: '#FAF9F6',

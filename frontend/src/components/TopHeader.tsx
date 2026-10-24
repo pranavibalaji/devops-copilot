@@ -18,7 +18,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <h1 className="header-title">{title}</h1>
         <div className="header-tag">
           <Cpu size={13} style={{ color: '#252525' }} />
-          <span>Decision: {decisionProvider.toUpperCase()} (llama-3.3-70b)</span>
+          <span>Decision: {decisionProvider.toUpperCase()}</span>
         </div>
       </div>
 

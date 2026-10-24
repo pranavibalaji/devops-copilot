@@ -9,7 +9,7 @@ Then in another terminal:
 
 Watch the agent auto-trigger and process the alert end-to-end.
 """
-
+import os
 import sys
 import time
 from dotenv import load_dotenv
@@ -51,7 +51,7 @@ def handle_alert(alert: dict):
 if __name__ == "__main__":
     print("🤖 Incident Response Agent — listening for alerts")
     print("   Redis channel: alerts")
-    print("   Model: Ollama (mistral)")
+    print(f"   Model: {os.getenv('DECISION_PROVIDER', 'mock')} / Mock LLM: {os.getenv('USE_MOCK_LLM', '0')}")
     print("\n   Test with: python scripts/publish_alert.py --sev P1\n")
 
     subscribe_and_run(handle_alert)
